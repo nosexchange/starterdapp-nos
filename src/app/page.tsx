@@ -26,14 +26,13 @@ import { useState } from "react";
 
 import ReactJson from "react-json-view";
 
-const CONTRACT_ADDRESS = "0x87aEe89F96296DC7f89bd2Aa44E428e6419D7497";
-const PROJECT_ID = "f8a080c00d55d6a910f9986d3a835492";
-const NORD_URL = "https://api.layern.network";
-const EVM_URL =
-  "https://virtual.holesky.rpc.tenderly.co/a8423a65-dd6b-4042-89dd-4420307b38af";
-const PROMETHEUS_URL = "https://api.layern.network";
-const ROLLMAN_URL = "https://api.layern.network";
-const NORD_DEPLOYMENT = 1;
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
+const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID;
+const NORD_URL = process.env.NEXT_PUBLIC_NORD_URL;
+const EVM_URL = process.env.NEXT_PUBLIC_EVM_URL;
+const PROMETHEUS_URL = process.env.NEXT_PUBLIC_PROMETHEUS_URL;
+const ROLLMAN_URL = process.env.NEXT_PUBLIC_ROLLMAN_URL;
+const NORD_DEPLOYMENT = process.env.NEXT_PUBLIC_NORD_DEPLOYMENT;
 
 const PrettyPrintJSON = ({ jsonData }) => {
   const prettyJSON = JSON.stringify(jsonData, null, 2);
@@ -111,7 +110,7 @@ export default function Home() {
       evmUrl: EVM_URL!,
       prometheusUrl: PROMETHEUS_URL!,
       rollmanUrl: ROLLMAN_URL!,
-      nordDeployment: NORD_DEPLOYMENT,
+      nordDeployment: Number(NORD_DEPLOYMENT),
     });
 
     const provider = new JsonRpcProvider(EVM_URL);
