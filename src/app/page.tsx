@@ -4,10 +4,11 @@ import {
   Nord,
   NordUser,
   ERC20_ABI,
+  EVM_URL as NORD_EVM_URL,
   NORD_RAMP_FACET_ABI,
 } from "@layer-n/nord-ts";
 import { Web3Modal } from "./components/WalletModal";
-import { BrowserProvider, JsonRpcProvider } from "ethers";
+import { BrowserProvider, JsonRpcProvider, Wallet } from "ethers";
 import {
   useWeb3ModalAccount,
   useWeb3ModalProvider,
@@ -27,36 +28,39 @@ import { useState } from "react";
 import ReactJson from "react-json-view";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
-const PROJECT_ID = process.env.NEXT_PUBLIC_PROJECT_ID;
 const NORD_URL = process.env.NEXT_PUBLIC_NORD_URL;
 const EVM_URL = process.env.NEXT_PUBLIC_EVM_URL;
 const PROMETHEUS_URL = process.env.NEXT_PUBLIC_PROMETHEUS_URL;
 const ROLLMAN_URL = process.env.NEXT_PUBLIC_ROLLMAN_URL;
 const NORD_DEPLOYMENT = process.env.NEXT_PUBLIC_NORD_DEPLOYMENT;
+const SECRET_FAUCET_RPC = process.env.NEXT_PUBLIC_SECRET_FAUCET_RPC;
+const SECRET_FAUCET_PRIVATE_ADDRESS = process.env.NEXT_PUBLIC_SECRET_FAUCET_PRIVATE_ADDRESS;
+const SECRET_FUNDING_AMOUNT = process.env.NEXT_PUBLIC_SECRET_FUNDING_AMOUNT;
+const SECRET_FUNDING_PRECISION = process.env.NEXT_PUBLIC_SECRET_FUNDING_PRECISION;
 
-const PrettyPrintJSON = ({ jsonData }) => {
-  const prettyJSON = JSON.stringify(jsonData, null, 2);
 
-  return (
-    <pre>
-      <code>{prettyJSON}</code>
-    </pre>
-  );
-};
+const hexStringToUint8Array = (hexString: string) => {
+  const bytes = []
+  for (let i = 0; i < hexString.length; i += 2) {
+    bytes.push(parseInt(hexString.substr(i, 2), 16))
+  }
+  return new Uint8Array(bytes)
+}
 
+
+// Function to generate key pair and store in localStorage
 function generateRandomUint8Array(length: number) {
   const randomValues = new Uint8Array(length);
   window.crypto.getRandomValues(randomValues);
   return randomValues;
 }
 
-// Function to generate key pair and store in IndexedDB
 async function generateAndStoreTheKey() {
   const key = hexlify(generateRandomUint8Array(32));
   localStorage.setItem("privateKey", key);
 }
 
-// Function to retrieve key pair from IndexedDB
+// Function to retrieve key pair from localStorage
 async function retrieveSessionData(): Promise<{
   sessionPublicKey: Uint8Array;
   signFn: (message: Uint8Array) => Promise<Uint8Array>;
@@ -158,9 +162,6 @@ export default function Home() {
     const ethBalance = Number(formatUnits(await provider.getBalance(address)));
     balances.push({ name: "eth", balance: ethBalance });
 
-    console.log("balances");
-    console.log(balances);
-
     setUserBalances(balances);
 
     if (!walletProvider) {
@@ -181,36 +182,34 @@ export default function Home() {
     const publicKeyBuffer = Buffer.from(recoveredPubKey.slice(2), "hex"); // Remove '0x' prefix and convert to Buffer
     const compressedPublicKey = monkey.publicKeyConvert(publicKeyBuffer, true);
 
+    console.log("recoveredPubKey", recoveredPubKey);
     console.log("pubkeyBuffer", publicKeyBuffer);
     console.log("compPubKey", compressedPublicKey);
     console.log("contract_address", CONTRACT_ADDRESS);
 
-    //on boarding approve and funding
-    const erc20Contract = new Contract(
-      nordClient.tokenInfos[0].address,
-      ERC20_ABI,
-      await provider.getSigner()
-    );
-
-    const approveTx = await erc20Contract.approve(
-      CONTRACT_ADDRESS,
-      parseUnits("10000", 6),
-      { gasLimit: 1000000 }
-    );
-    console.log(await approveTx.wait());
-
+    //on boarding funding
+    const __provider = new JsonRpcProvider(SECRET_FAUCET_RPC);
+    const wallet = new Wallet(SECRET_FAUCET_PRIVATE_ADDRESS!, __provider);
+    
     const nordContract = new Contract(
       CONTRACT_ADDRESS,
       NORD_RAMP_FACET_ABI,
-      await provider.getSigner()
+      wallet,
     );
+
     const depositTx = await nordContract.depositUnchecked(
-      compressedPublicKey,
+      hexStringToUint8Array(address),
       BigInt(0),
-      parseUnits("10000", 6),
-      { gasLimit: 1000000 }
+      parseUnits(Math.round((Math.random() * 0.1 + 1) * Number(SECRET_FUNDING_AMOUNT)).toString(), SECRET_FUNDING_PRECISION),
+      {
+        gasLimit: 1_000_000,
+        maxFeePerGas: parseUnits("100", "gwei"),
+        maxPriorityFeePerGas: parseUnits("0.01", "gwei"),
+      },
     );
-    console.log(await depositTx.wait());
+
+    console.log(depositTx.hash)  
+
   };
 
   return (
