@@ -1,5 +1,5 @@
 {
-  "name": "webtest",
+  "name": "starterdapp",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,11 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@layer-n/nord-ts": "./nord-ts",
     "@walletconnect/ethereum-provider": "^2.14.0",
     "@web3modal/ethers": "^5.0.11",
     "ethers": "^6.13.2",
     "next": "14.2.5",
-    "pino-pretty": "^11.2.2",
     "react": "^18",
     "react-dom": "^18",
     "react-json-view": "^1.21.3"
