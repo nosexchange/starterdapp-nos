@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Nord } from '@layer-n/nord-ts'
-
+import { depositOnlyTx } from "@layer-n/nord-ts/dist/nord/Nord";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const publicKey = searchParams.get("publicKey");
-  const contractAddress = searchParams.get("contractAddress");
-
+  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as string;
 
   const hexStringToUint8Array = (hexString: string) => {
     const bytes = [];
@@ -16,12 +14,10 @@ export async function GET(request: NextRequest) {
     return new Uint8Array(bytes);
   };
 
-  const txHash = await Nord.depositOnlyTx(
+  const txHash = await depositOnlyTx(
     process.env.SECRET_FAUCET_PRIVATE_ADDRESS!,
     hexStringToUint8Array(publicKey as string),
-    Math.round(
-      (Math.random() * 0.1 + 1) * Number(process.env.NEXT_PUBLIC_SECRET_FUNDING_AMOUNT)
-    ),
+    Number(process.env.NEXT_PUBLIC_SECRET_FUNDING_AMOUNT),
     Number(process.env.NEXT_PUBLIC_SECRET_FUNDING_PRECISION),
     contractAddress as string
   );
@@ -29,5 +25,4 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     txHash: txHash,
   });
-
 }

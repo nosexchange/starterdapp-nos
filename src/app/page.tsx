@@ -2,25 +2,15 @@
 
 // External library imports
 import { ed25519 } from "@noble/curves/ed25519";
-import {
-  Nord,
-  NordUser,
-  ERC20_ABI,
-  NORD_RAMP_FACET_ABI,
-  Side,
-  FillMode,
-  assert,
-} from "@layer-n/nord-ts";
+import { Nord, NordUser, Side, FillMode } from "@layer-n/nord-ts";
 import { Web3Modal } from "./components/WalletModal";
-import { BrowserProvider, JsonRpcProvider, Wallet } from "ethers";
+import { BrowserProvider } from "ethers";
 import {
   useWeb3ModalAccount,
   useWeb3ModalProvider,
 } from "@web3modal/ethers/react";
 import { getBytes, hexlify } from "ethers";
-import { useMemo, useRef, useState, useCallback, useEffect } from "react";
-import { JsonView } from "react-json-view-lite";
-import "react-json-view-lite/dist/index.css";
+import { useRef, useState, useCallback, useEffect } from "react";
 import crypto from "crypto";
 
 // Environment variables
@@ -34,7 +24,9 @@ const EVM_URL = process.env.NEXT_PUBLIC_EVM_URL;
  * @returns The hexadecimal string representation.
  */
 const uint8ArrayToHexString = (uint8Array: Uint8Array) =>
-  Array.from(uint8Array, (byte) => `0${(byte & 0xff).toString(16)}`.slice(-2)).join('');
+  Array.from(uint8Array, (byte) =>
+    `0${(byte & 0xff).toString(16)}`.slice(-2)
+  ).join("");
 
 /**
  * Generates random values for a given buffer.
@@ -78,24 +70,12 @@ const retrieveSessionData = async (): Promise<{
   const privateKeyHex = localStorage.getItem("privateKey");
   if (privateKeyHex) {
     const privateKey = getBytes(privateKeyHex);
-    const signFn = async (message: Uint8Array) => ed25519.sign(message, privateKey);
+    const signFn = async (message: Uint8Array) =>
+      ed25519.sign(message, privateKey);
     const sessionPublicKey = ed25519.getPublicKey(privateKey);
     return { sessionPublicKey, signFn };
   }
   throw new Error("No private key found");
-};
-
-/**
- * Retrieves existing session signing info or creates new if not found.
- * @returns An object containing the session public key and sign function.
- */
-export const retrieveOrCreateSessionSigningInfo = async () => {
-  try {
-    return await retrieveSessionData();
-  } catch (_) {
-    await generateAndStoreTheKey();
-    return await retrieveSessionData();
-  }
 };
 
 /**
@@ -129,14 +109,8 @@ export default function Home() {
 
     const checkFunding = async () => {
       try {
-        await nordUser.updateUserId();
-        const res = await fetch(
-          `https://staging-api.layern.network/account?user_id=${nordUser.userId}`
-        );
-        const data = await res.json();
-
-        nordUser.balances = data.balances;
-        nordUser.orders = data.orders;
+        await nordUser.updateAccountId();
+        await nordUser.fetchInfo();
 
         const publicKey = ed25519.getPublicKey(privateSessionKey);
         await nordUser.refreshSession(publicKey);
@@ -156,46 +130,22 @@ export default function Home() {
   }, [newUser, nordUser, privateSessionKey, walletProvider]);
 
   /**
-   * Effect to initialize NordUser when wallet is connected.
-   */
-  useEffect(() => {
-    if (!isConnected || !walletProvider || !nordClient) return;
-
-    const getNordUser = async () => {
-      const provider = new BrowserProvider(walletProvider);
-      const signer = await provider.getSigner();
-
-      const newNordUser = new NordUser({
-        nord: nordClient,
-        address,
-        walletSignFn: (message: Uint8Array | string) =>
-          signer.signMessage.call(signer, message),
-        sessionSignFn: signFn,
-      });
-
-      // setNordUser(newNordUser);
-    };
-
-    getNordUser();
-  }, [isConnected, walletProvider, nordClient, address, signFn]);
-
-  /**
    * Handles user login and initialization.
    */
   const handleLogin = useCallback(async () => {
-    if (!isConnected || !walletProvider) {
+    if (!isConnected || !walletProvider || !address) {
       console.log("Not connected");
       return;
     }
 
-    
+    // this is logout
     if (nordUser?.sessionId) {
       setNordUser(null);
       localStorage.removeItem("privateKey");
       return;
     }
 
-
+    // this is login
     const newNordClient = await new Nord({
       webServerUrl: NORD_URL!,
       evmUrl: EVM_URL!,
@@ -217,37 +167,82 @@ export default function Home() {
       sessionSignFn: signFn,
     });
 
+    console.log("set public key");
     await newNordUser.setPublicKey();
+    console.log("nord user set public key", newNordUser);
 
     try {
-      await newNordUser.updateUserId();
+      console.log("update account id");
+      await newNordUser.updateAccountId();
+      console.log("nord user update account id", newNordUser);
     } catch (e) {
-      if (e instanceof Error && e.message.includes("user not found")) {
-        const url = `/api/fund?contractAddress=${
-          newNordClient.contractAddress
-        }&publicKey=${uint8ArrayToHexString(newNordUser.publicKey!)}`;
-        await fetch(url);
+      if (e instanceof Error && e.message.includes("USER_NOT_FOUND")) {
+        console.log("user not found");
+
+        // first approve the contract to spend the user's tokens (this is a check and approve)
+        let url = `/api/approve?address=${address}`;
+        let resp = await fetch(url);
+        console.log("approve response", resp);
+
+        // wait 5 seconds for the approve to be processed
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        // fund the user
+        url = `/api/fund?publicKey=${uint8ArrayToHexString(newNordUser.publicKey!)}`;
+        resp = await fetch(url);
+        console.log("funding response", resp);
+
         setNewUser(true);
         setNordUser(newNordUser);
         return;
       }
     }
 
+    // if the user is new, we need to fund them
     if (newUser) return;
 
-    const res = await fetch(
-      `https://staging-api.layern.network/account?user_id=${newNordUser.userId}`
-    );
-    const data = await res.json();
+    // fetch the user's info
+    await newNordUser.fetchInfo();
+    setNordUser(newNordUser);
 
-    newNordUser.balances = data.balances;
-    newNordUser.orders = data.orders;
-
+    // refresh the session
     const publicKey = ed25519.getPublicKey(privateSessionKey);
-    await newNordUser.refreshSession(publicKey);
+    try {
+      await newNordUser.refreshSession(publicKey);
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("USER_NOT_FOUND")) {
+        console.log("User not found during session refresh. Funding the user.");
+
+        // first approve the contract to spend the user's tokens (this is a check and approve)
+        let url = `/api/approve?address=${address}`;
+        let resp = await fetch(url);
+        console.log("approve response", await resp.json());
+
+        // wait 5 seconds for the approve to be processed
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        // fund the user
+        url = `/api/fund?publicKey=${uint8ArrayToHexString(newNordUser.publicKey!)}`;
+        resp = await fetch(url);
+        console.log("funding response", await resp.json());
+        setNewUser(true);
+        setNordUser(newNordUser);
+        return;
+      }
+      console.error("Error refreshing session:", e);
+    }
 
     setNordUser(newNordUser);
-  }, [isConnected, walletProvider, address, signFn, newUser, privateSessionKey]);
+    setStateBump((prev) => prev + 1);
+  }, [
+    isConnected,
+    walletProvider,
+    nordUser?.sessionId,
+    address,
+    signFn,
+    newUser,
+    privateSessionKey,
+  ]);
 
   /**
    * Handles placing a new order.
@@ -255,8 +250,10 @@ export default function Home() {
   const handlePlaceOrder = useCallback(async () => {
     if (!nordUser) return;
 
-    const size = (document.getElementById("orderSize") as HTMLInputElement).value;
-    const price = (document.getElementById("orderPrice") as HTMLInputElement).value;
+    const size = (document.getElementById("orderSize") as HTMLInputElement)
+      .value;
+    const price = (document.getElementById("orderPrice") as HTMLInputElement)
+      .value;
 
     try {
       await nordUser.placeOrder({
@@ -268,12 +265,7 @@ export default function Home() {
         price,
       });
 
-      const res = await fetch(
-        `https://staging-api.layern.network/account?user_id=${nordUser.userId}`
-      );
-      const data = await res.json();
-      nordUser.balances = data.balances;
-      nordUser.orders = data.orders;
+      await nordUser.fetchInfo();
       setNordUser(nordUser);
       setStateBump((prev) => prev + 1);
     } catch (e) {
@@ -285,28 +277,29 @@ export default function Home() {
    * Handles cancelling an existing order.
    * @param orderId - The ID of the order to cancel.
    */
-  const handleCancelOrder = useCallback(async (orderId: number) => {
-    if (!nordUser) return;
+  const handleCancelOrder = useCallback(
+    async (orderId: number) => {
+      if (!nordUser) return;
 
-    try {
-      await nordUser.cancelOrder(orderId);
-      const res = await fetch(
-        `https://staging-api.layern.network/account?user_id=${nordUser.userId}`
-      );
-      const data = await res.json();
+      try {
+        await nordUser.cancelOrder(orderId);
+        await nordUser.fetchInfo();
 
-      nordUser.balances = data.balances;
-      nordUser.orders = data.orders;
-      setNordUser(nordUser);
-      setStateBump((prev) => prev + 1);
-    } catch (e) {
-      console.error(`Error cancelling order ${orderId}:`, e);
-    }
-  }, [nordUser]);
+        setNordUser(nordUser);
+        setStateBump((prev) => prev + 1);
+      } catch (e) {
+        console.error(`Error cancelling order ${orderId}:`, e);
+      }
+    },
+    [nordUser]
+  );
 
   return (
     <Web3Modal>
-      <main className="min-h-screen p-4 md:p-8 bg-gray-900 text-gray-100" key={stateBump}>
+      <main
+        className="min-h-screen p-4 md:p-8 bg-gray-900 text-gray-100"
+        key={stateBump}
+      >
         <div className="w-full max-w-5xl mx-auto space-y-8">
           <div className="flex flex-row items-center justify-between font-mono text-lg">
             <w3m-button />
@@ -318,7 +311,7 @@ export default function Home() {
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg hover:bg-blue-700 transition duration-300"
                 onClick={handleLogin}
               >
-                {nordUser?.sessionId ? 'Logout' : 'Login'}
+                {nordUser?.sessionId ? "Logout" : "Login"}
               </button>
             </div>
           )}
@@ -327,7 +320,10 @@ export default function Home() {
           <div className="flex flex-row items-center justify-center font-mono text-lg mt-8">
             <div className="bg-gray-800 text-gray-100 p-6 rounded-lg shadow-lg w-full max-w-md">
               <h2 className="text-2xl font-bold mb-4">Funding in Progress</h2>
-              <p className="mb-4">Please wait while we complete the funding process. This may take a few minutes.</p>
+              <p className="mb-4">
+                Please wait while we complete the funding process. This may take
+                a few minutes.
+              </p>
               <div className="flex justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
               </div>
@@ -341,27 +337,52 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <p className="font-semibold">Address:</p>
-                  <p className="text-sm">{`${nordUser.address.substring(0, 6)}...${nordUser.address.substring(nordUser.address.length - 4)}`}</p>
+                  <p className="text-sm">{`${nordUser.address.substring(
+                    0,
+                    6
+                  )}...${nordUser.address.substring(
+                    nordUser.address.length - 4
+                  )}`}</p>
                 </div>
                 <div>
                   <p className="font-semibold">User ID:</p>
-                  <p className="text-sm">{nordUser.userId}</p>
+                  <p className="text-sm">{nordUser.accountId}</p>
                 </div>
                 <div>
                   <p className="font-semibold">Session ID:</p>
                   <p className="text-sm">{nordUser.sessionId?.toString()}</p>
                 </div>
               </div>
-              
+
               <h3 className="text-xl font-bold mt-6 mb-2">Balances</h3>
               <div className="bg-gray-700 p-4 rounded-lg mb-6">
-                {Array.isArray(nordUser.balances) && nordUser.balances.map((balance) => (
-                  <div key={balance.tokenId} className="flex justify-between items-center mb-2">
-                    <span>{balance.token}:</span>
-                    <span className="font-semibold">{balance.amount}</span>
-                  </div>
-                ))}
+                {
+                  Object.entries(nordUser.balances).map(([token, balance]) => (
+                    <div
+                      key={token}
+                      className="flex justify-between items-center mb-2"
+                    >
+                      <span>{token}:</span>
+                      <span className="font-semibold">{balance}</span>
+                    </div>
+                  ))}
               </div>
+
+              {/*
+              <h3 className="text-xl font-bold mt-6 mb-2">Positions</h3>
+              <div className="bg-gray-700 p-4 rounded-lg mb-6">
+                {
+                  Object.entries(nordUser.positions).map(([token, position]) => (
+                    <div
+                      key={token}
+                      className="flex justify-between items-center mb-2"
+                    >
+                      <span>{token}:</span>
+                      <span className="font-semibold">{balance}</span>
+                    </div>
+                  ))}
+              </div>
+               */}
 
               <h3 className="text-xl font-bold mt-6 mb-2">Place Order</h3>
               <div className="bg-gray-700 p-4 rounded-lg mb-6">
@@ -391,23 +412,38 @@ export default function Home() {
 
               <h3 className="text-xl font-bold mt-6 mb-2">Active Orders</h3>
               <div className="space-y-4">
-                {nordUser.orders && nordUser.orders.map((order, index) => (
-                  <div key={index} className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
-                    <div>
-                      <p><strong>ID:</strong> {order.orderId}</p>
-                      <p><strong>Market:</strong> {order.marketId}</p>
-                      <p><strong>Side:</strong> {order.side}</p>
-                      <p><strong>Size:</strong> {order.size}</p>
-                      <p><strong>Price:</strong> {order.price}</p>
-                    </div>
-                    <button
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-700 transition duration-300"
-                      onClick={() => handleCancelOrder(order.orderId)}
+                {nordUser.orders &&
+                  nordUser.orders.map((order, index) => (
+                    <div
+                      key={index}
+                      className="bg-gray-700 p-4 rounded-lg flex justify-between items-center"
                     >
-                      Cancel
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <p>
+                          <strong>ID:</strong> {order.orderId}
+                        </p>
+                        <p>
+                          <strong>Market:</strong> {order.marketId}
+                        </p>
+                        <p>
+                          <strong>Side:</strong>{" "}
+                          {order.isLong ? "Long" : "Short"}
+                        </p>
+                        <p>
+                          <strong>Size:</strong> {order.size}
+                        </p>
+                        <p>
+                          <strong>Price:</strong> {order.price}
+                        </p>
+                      </div>
+                      <button
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-700 transition duration-300"
+                        onClick={() => handleCancelOrder(order.orderId)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
