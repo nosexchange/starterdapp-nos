@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@layer-n/nord-ts": "./nord-ts",
+    "@layer-n/nord-ts": "^0.0.44",
     "@walletconnect/ethereum-provider": "^2.14.0",
     "@web3modal/ethers": "^5.0.11",
     "ethers": "^6.13.2",
