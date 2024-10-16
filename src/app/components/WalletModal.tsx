@@ -1,4 +1,3 @@
-import { CHAIN_ID, EVM_URL } from '@layer-n/nord-ts'
 import { createWeb3Modal, defaultConfig } from '@web3modal/ethers/react'
 
 // 1. Get projectId at https://cloud.walletconnect.com
@@ -6,11 +5,11 @@ const projectId = 'f8a080c00d55d6a910f9986d3a835492'
 
 // 2. Set chains
 const mainnet = {
-	chainId: CHAIN_ID,
+	chainId: 31337,
 	name: 'Anvil',
 	currency: 'ETH',
 	explorerUrl: 'https://etherscan.io',
-	rpcUrl: EVM_URL,
+	rpcUrl: process.env.NEXT_PUBLIC_EVM_URL!,
 }
 
 // 3. Create a metadata object
@@ -43,6 +42,7 @@ createWeb3Modal({
 	enableOnramp: true, // Optional - false as default
 })
 
+//@ts-ignore
 export function Web3Modal({ children }) {
 	return children
 }
