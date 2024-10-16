@@ -15,6 +15,7 @@ import crypto from "crypto";
 import CreateAccount from "./components/CreateAccount";
 import AccountSwitcher from "./components/AccountSwitcher";
 
+
 // Environment variables
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 const NORD_URL = process.env.NEXT_PUBLIC_NORD_URL;
@@ -256,6 +257,7 @@ export default function Home() {
   const handlePlaceOrder = useCallback(async () => {
     if (!nordUser || !nordUser.accountIds) return;
 
+
     const size = (document.getElementById("orderSize") as HTMLInputElement)
       .value;
     const price = (document.getElementById("orderPrice") as HTMLInputElement)
@@ -275,7 +277,6 @@ export default function Home() {
       console.log("placing order", _order);
 
       await nordUser.placeOrder(_order);
-
       await nordUser.fetchInfo();
       setNordUser(nordUser);
       setStateBump((prev) => prev + 1);
@@ -305,8 +306,6 @@ export default function Home() {
     },
     [nordUser]
   );
-
-  console.log("nordUser", nordUser);
 
   return (
     <Web3Modal>
@@ -371,7 +370,6 @@ export default function Home() {
 
               <h3 className="text-xl font-bold mt-6 mb-2">Balances</h3>
               <div className="bg-gray-700 p-4 rounded-lg mb-6">
-               
               </div>
 
               {/*
