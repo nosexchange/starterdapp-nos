@@ -317,7 +317,7 @@ export default function Home() {
         <div className="w-full max-w-5xl mx-auto space-y-8">
           <div className="flex flex-row items-center justify-between font-mono text-lg">
             <w3m-button />
-            <AccountSwitcher nordUser={nordUser} setAccountId={setSelectedAccountId} />
+            <AccountSwitcher nordUser={nordUser!} setAccountId={setSelectedAccountId} />
           </div>
 
           {isConnected && (
@@ -418,8 +418,8 @@ export default function Home() {
 
               <h3 className="text-xl font-bold mt-6 mb-2">Active Orders</h3>
               <div className="space-y-4">
-                {/* {nordUser.orders &&
-                  nordUser.orders.filter(order => order.accountId === selectedAccountId).map((order, index) => (
+                {selectedAccountId &&
+                  nordUser.orders[selectedAccountId!].map((order, index) => (
                     <div
                       key={index}
                       className="bg-gray-700 p-4 rounded-lg flex justify-between items-center"
@@ -449,7 +449,7 @@ export default function Home() {
                         Cancel
                       </button>
                     </div>
-                  ))} */}
+                  ))}
               </div>
             </div>
           </div>

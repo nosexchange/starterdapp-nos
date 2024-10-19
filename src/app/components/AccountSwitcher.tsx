@@ -10,7 +10,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ nordUser, setAccountI
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined)
   
   useEffect(() => {
-    setSelectedAccountId(nordUser.accountIds?.[0]);
+    // setSelectedAccountId(nordUser.accountIds?.[0]);
   }, [nordUser])
 
   const handleAccountChange = (id: number) => {
@@ -21,6 +21,10 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ nordUser, setAccountI
 
   const handleAddAccount = () => {
     console.log("add account");
+    if (selectedAccountId) {
+    //   const tokenId = nordUser.balances[selectedAccountId].sym;
+    //   nordUser.createAccount({tokenId: nordUser.balances[selectedAccountId].tokenId, amount: 5});
+    }
   };
 
   return (
