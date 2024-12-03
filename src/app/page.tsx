@@ -12,6 +12,9 @@ import {
 import { getBytes, hexlify } from "ethers";
 import { useRef, useState, useCallback, useEffect } from "react";
 import crypto from "crypto";
+import CreateAccount from "./components/CreateAccount";
+import AccountSwitcher from "./components/AccountSwitcher";
+
 
 // Environment variables
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
@@ -90,6 +93,7 @@ export default function Home() {
   const { isConnected, address } = useWeb3ModalAccount();
   const { walletProvider } = useWeb3ModalProvider();
   const [stateBump, setStateBump] = useState(0);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
   const interval = useRef<NodeJS.Timeout | null>(null);
 
@@ -116,6 +120,9 @@ export default function Home() {
         await nordUser.refreshSession(publicKey);
 
         setNordUser(nordUser);
+        if (nordUser.accountIds?.[0]) {
+          setSelectedAccountId(nordUser.accountIds?.[0]);
+        }
         setNewUser(false);
       } catch (e) {
         console.error("Error checking funding:", e);
@@ -248,7 +255,8 @@ export default function Home() {
    * Handles placing a new order.
    */
   const handlePlaceOrder = useCallback(async () => {
-    if (!nordUser) return;
+    if (!nordUser || !nordUser.accountIds) return;
+
 
     const size = (document.getElementById("orderSize") as HTMLInputElement)
       .value;
@@ -256,15 +264,19 @@ export default function Home() {
       .value;
 
     try {
-      await nordUser.placeOrder({
+      const _order = {
         marketId: 0,
         side: Side.Bid,
         fillMode: FillMode.Limit,
         isReduceOnly: false,
         size,
         price,
-      });
+        accountId: nordUser.accountIds?.[0],
+      }
 
+      console.log("placing order", _order);
+
+      await nordUser.placeOrder(_order);
       await nordUser.fetchInfo();
       setNordUser(nordUser);
       setStateBump((prev) => prev + 1);
@@ -282,7 +294,8 @@ export default function Home() {
       if (!nordUser) return;
 
       try {
-        await nordUser.cancelOrder(orderId);
+        if (!nordUser.accountIds?.[0]) return;
+        await nordUser.cancelOrder(orderId, nordUser.accountIds?.[0]);
         await nordUser.fetchInfo();
 
         setNordUser(nordUser);
@@ -303,6 +316,7 @@ export default function Home() {
         <div className="w-full max-w-5xl mx-auto space-y-8">
           <div className="flex flex-row items-center justify-between font-mono text-lg">
             <w3m-button />
+            <AccountSwitcher nordUser={nordUser!} setAccountId={setSelectedAccountId} />
           </div>
 
           {isConnected && (
@@ -346,7 +360,7 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="font-semibold">User ID:</p>
-                  <p className="text-sm">{nordUser.accountId}</p>
+                  <p className="text-sm">{nordUser.accountIds?.[0]}</p>
                 </div>
                 <div>
                   <p className="font-semibold">Session ID:</p>
@@ -356,16 +370,6 @@ export default function Home() {
 
               <h3 className="text-xl font-bold mt-6 mb-2">Balances</h3>
               <div className="bg-gray-700 p-4 rounded-lg mb-6">
-                {
-                  Object.entries(nordUser.balances).map(([token, balance]) => (
-                    <div
-                      key={token}
-                      className="flex justify-between items-center mb-2"
-                    >
-                      <span>{token}:</span>
-                      <span className="font-semibold">{balance}</span>
-                    </div>
-                  ))}
               </div>
 
               {/*
@@ -412,8 +416,8 @@ export default function Home() {
 
               <h3 className="text-xl font-bold mt-6 mb-2">Active Orders</h3>
               <div className="space-y-4">
-                {nordUser.orders &&
-                  nordUser.orders.map((order, index) => (
+                {selectedAccountId &&
+                  nordUser.orders[selectedAccountId!].map((order, index) => (
                     <div
                       key={index}
                       className="bg-gray-700 p-4 rounded-lg flex justify-between items-center"
